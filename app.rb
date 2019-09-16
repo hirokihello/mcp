@@ -49,19 +49,26 @@ get '/' do
   app.start
   db.start
 
-  puts app.exec(['apt', 'update'], stdout: true, tty: true)
-  # # puts "upgradeを走らせる"
-  # # puts app.exec(['apt', 'upgrade', '-qq', '-y'], stdout: true, tty: true)
-  # # puts app.exec(['apt', 'install', 'git'], stdout: true, tty: true)
-  puts app.exec(['apt', 'install', 'dnsutils', '-qq', '-y'], stdout: true, tty: true)
+  puts app.exec(['apt', 'update'])
+  puts "upgradeを走らせる"
+  puts app.exec(['apt', 'upgrade', '-qq', '-y'])
+  puts app.exec(['apt', 'install', 'git'])
+  puts app.exec(['apt', 'install', 'dnsutils', '-qq', '-y'])
   puts "nslookupをうつ"
-  puts app.exec(['dig', 'ci_db_container'], stdout: true, tty: true)
+  puts app.exec(['dig', 'ci_db_container'])
 
-  #gitからひっぱてくる
-  # puts app.exec(['git', 'clone', 'https://github.com/hirokihello/rails-realworld-example-app.git'], stdout: true, tty: true)
-# binding.pry
-  # command = ["/bin/bash", "-c", "echo -n \"I'm a TTY!\""]
-  # puts app.exec(command, tty: true)
+  puts  "git clone"
+  puts app.exec(['git', 'clone', 'https://github.com/hirokihello/rails-realworld-example-app.git'])
+
+  puts  "cd | ls"
+  dir = "rails-realworld-example-app"
+  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle install"])
+# カレントディレクトリに全部コピーするのはファイル名被ったらやばいから脆弱性になるおわおわた
+なあ
+  puts app.exec(['ls', '-l'])
+binding.pry
+  command = ["/bin/bash", "-c", "echo -n \"I'm a TTY!\""]
+  puts app.exec(command, tty: true)
   app.stop
   db.stop
   app.remove
