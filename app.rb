@@ -10,8 +10,6 @@ get '/' do
   network = Docker::Network.get('ci-network')
   network = Docker::Network.create('ci-network') unless network
 
-  app_image = Docker::Image.create('fromImage' => 'ruby:2.6.3')
-  app_image.tag('repo' => 'ruby-base-hirokihello', 'tag' => 'latest', force: true)
 
   db_image = Docker::Image.create('fromImage' => 'mysql:5.6')
   db_image.tag('repo' => 'mysql-base-hirokihello', 'tag' => 'latest', force: true)
@@ -26,7 +24,11 @@ get '/' do
     'name' => 'ci_app_container',
     'net' => 'ci-network',
     'Env' => [
-      'MYSQL_ROOT_PASSWORD=password'
+      'TEST_DATABASE_NAME=testdb',
+      'TEST_DATABASE_USERNAME=hirokihello',
+      'TEST_DATABASE_PASSWORD=password',
+      'TEST_DATABASE_HOST=ci_db_container',
+      'TEST_DATABASE_PORT=3306',
     ]
   )
 
@@ -40,7 +42,8 @@ get '/' do
     'name' => 'ci_db_container',
     'net' => 'ci-network',
     'Env' => [
-      'MYSQL_ROOT_PASSWORD=password'
+      'MYSQL_ROOT_PASSWORD=password',
+      'MYSQL_USER=hirokihello'
     ]
   )
 
@@ -57,14 +60,17 @@ get '/' do
   puts "nslookupをうつ"
   puts app.exec(['dig', 'ci_db_container'])
 
+  puts app.exec(['bundler', '-v'])
   puts  "git clone"
   puts app.exec(['git', 'clone', 'https://github.com/hirokihello/rails-realworld-example-app.git'])
 
   puts  "cd | ls"
   dir = "rails-realworld-example-app"
   puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle install"])
+  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:drop db:create RAILS_ENV=test"])
+  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:fixtures"])
 # カレントディレクトリに全部コピーするのはファイル名被ったらやばいから脆弱性になるおわおわた
-なあ
+
   puts app.exec(['ls', '-l'])
 binding.pry
   command = ["/bin/bash", "-c", "echo -n \"I'm a TTY!\""]
@@ -78,5 +84,5 @@ end
 
 private
 
-  def create_containers
+  def create_app_container
   end
