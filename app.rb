@@ -7,82 +7,100 @@ require 'pry-byebug'
 set :server_settings, :timeout => 300
 
 get '/' do
-  network = Docker::Network.get('ci-network')
-  network = Docker::Network.create('ci-network') unless network
 
+  create_image
 
-  db_image = Docker::Image.create('fromImage' => 'mysql:5.6')
-  db_image.tag('repo' => 'mysql-base-hirokihello', 'tag' => 'latest', force: true)
+  app = create_app_container
+  db = create_db_container
 
-  app = Docker::Container.create(
-    'Cmd' => ['/bin/bash'],
-    'Image' => 'ruby-base-hirokihello:latest',
-    'OpenStdin' => true,
-    'OpenStdout' => true,
-    'tty' => true,
-    'logs' => true,
-    'name' => 'ci_app_container',
-    'net' => 'ci-network',
-    'Env' => [
-      'TEST_DATABASE_NAME=testdb',
-      'TEST_DATABASE_USERNAME=hirokihello',
-      'TEST_DATABASE_PASSWORD=password',
-      'TEST_DATABASE_HOST=ci_db_container',
-      'TEST_DATABASE_PORT=3306',
-    ]
-  )
+  connect_network
 
-  db = Docker::Container.create(
-    'Cmd' => ["/bin/bash"],
-    'Image' => 'mysql-base-hirokihello:latest',
-    'OpenStdin' => true,
-    'OpenStdout' => true,
-    'tty' => true,
-    'logs' => true,
-    'name' => 'ci_db_container',
-    'net' => 'ci-network',
-    'Env' => [
-      'MYSQL_ROOT_PASSWORD=password',
-      'MYSQL_USER=hirokihello'
-    ]
-  )
-
-  network.connect('ci_app_container')
-  network.connect('ci_db_container')
   app.start
   db.start
-
+  # どっかに閉じ込めたい
   puts app.exec(['apt', 'update'])
-  puts "upgradeを走らせる"
   puts app.exec(['apt', 'upgrade', '-qq', '-y'])
-  puts app.exec(['apt', 'install', 'git'])
-  puts app.exec(['apt', 'install', 'dnsutils', '-qq', '-y'])
-  puts "nslookupをうつ"
-  puts app.exec(['dig', 'ci_db_container'])
+  puts app.exec(['apt', 'install', '-qq', '-y','nodejs', 'default-mysql-client', 'git', 'dnsutils'])
 
-  puts app.exec(['bundler', '-v'])
-  puts  "git clone"
-  puts app.exec(['git', 'clone', 'https://github.com/hirokihello/rails-realworld-example-app.git'])
+  puts app.exec(['git', 'clone', 'https://github.com/hirokihello/rails-docker-sample.git'])
 
-  puts  "cd | ls"
-  dir = "rails-realworld-example-app"
+  dir = "rails-docker-sample"
   puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle install"])
-  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:drop db:create RAILS_ENV=test"])
-  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:fixtures"])
-# カレントディレクトリに全部コピーするのはファイル名被ったらやばいから脆弱性になるおわおわた
+  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:create"])
+  puts app.exec(['mysql', '-u', 'root', '-h', 'ci_db_container'])
+  puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:drop db:create"])
 
-  puts app.exec(['ls', '-l'])
-binding.pry
-  command = ["/bin/bash", "-c", "echo -n \"I'm a TTY!\""]
-  puts app.exec(command, tty: true)
+  # 標準出力先を指定
+  $stdout = StringIO.new
+
+  app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rubocop"])
+  # puts app.exec(['/bin/bash', '-c', "cd ./#{dir} && bundle exec rails db:fixtures"])
+  # カレントディレクトリに全部コピーするのはファイル名被ったらやばいから脆弱性になるおわおわた
+
+  # 出力された値を取得
+  result = $stdout.string
+
+  # 出力先を戻す
+  $stdout = STDOUT
+
   app.stop
   db.stop
   app.remove
   db.remove
-  "hello"
+
+  result
 end
 
 private
+  def create_image
+    app_image = Docker::Image.create('fromImage' => 'ruby:2.6.3')
+    app_image.tag('repo' => 'ruby-base-hirokihello', 'tag' => 'latest', force: true)
+
+    db_image = Docker::Image.create('fromImage' => 'mysql:5.6')
+    db_image.tag('repo' => 'mysql-base-hirokihello', 'tag' => 'latest', force: true)
+  end
+
+  def connect_network
+    network = Docker::Network.get('ci-network')
+    network = Docker::Network.create('ci-network') unless network
+    network.connect('ci_app_container')
+    network.connect('ci_db_container')
+  end
 
   def create_app_container
+    Docker::Container.create(
+      'Cmd' => ['/bin/bash'],
+      'Image' => 'ruby-base-hirokihello:latest',
+      'OpenStdin' => true,
+      'OpenStdout' => true,
+      'tty' => true,
+      'logs' => true,
+      'name' => 'ci_app_container',
+      'Env' => [
+        'RAILS_ENV=test',
+        'TEST_DATABASE_NAME=test_db',
+        'TEST_DATABASE_USERNAME=sample',
+        'TEST_DATABASE_PASSWORD=password',
+        'TEST_DATABASE_HOST=ci_db_container',
+        'TEST_DATABASE_PORT=3306',
+      ]
+    )
+  end
+
+  def create_db_container
+    Docker::Container.create(
+      'Image' => 'mysql-base-hirokihello:latest',
+      'OpenStdin' => true,
+      'OpenStdout' => true,
+      'tty' => true,
+      'logs' => true,
+      'name' => 'ci_db_container',
+      'Env' => [
+        'MYSQL_ROOT_PASSWORD=password',
+        'MYSQL_DATABASE=test_db',
+        'MYSQL_HOST=172.*.*.*',
+        'MYSQL_USER=sample',
+        'MYSQL_PASSWORD=password',
+      ]
+    )
   end
