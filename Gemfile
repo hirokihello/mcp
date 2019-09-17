@@ -5,9 +5,10 @@ git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
 ruby '2.6.3'
 
-gem 'slack-ruby-client'
 gem 'docker-api'
 gem 'pry-byebug'
 gem 'rubocop'
 gem 'sinatra'
 gem 'sinatra-contrib'
+gem 'faraday'
+gem 'faraday_middleware'

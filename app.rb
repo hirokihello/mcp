@@ -3,6 +3,9 @@ require 'sinatra'
 require 'docker'
 require 'sinatra/reloader'
 require 'pry-byebug'
+require 'faraday'
+require 'faraday_middleware'
+require 'json'
 
 set :server_settings, :timeout => 300
 
@@ -47,7 +50,8 @@ get '/' do
   db.stop
   app.remove
   db.remove
-
+  result = "hoge"
+  post_result_to_slack(result)
   result
 end
 
@@ -103,4 +107,22 @@ private
         'MYSQL_PASSWORD=password',
       ]
     )
+  end
+
+  def post_result_to_slack(result)
+    url = 'https://slack.com/api/chat.postMessage'
+
+    conn = Faraday.new(:url => url) do |builder|
+      builder.request :url_encoded
+      builder.adapter Faraday.default_adapter
+    end
+
+    body ={
+      token: ENV['SLACK_API_TOKEN'],
+      channel: 'x-times-inoue_h',
+      text: result
+    }
+
+    res = conn.post {|c| c.body = body}
+
   end
