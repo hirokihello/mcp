@@ -1,0 +1,4 @@
+vendor/*
+.env
+.envrc
+cinfig.yml
